@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>NBA Player Stats Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+            line-height: 1.6;
+        }
+        .container {
+            background-color: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #statsTable {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        #statsTable th, #statsTable td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        #statsTable th {
+            background-color: #f2f2f2;
+        }
+        canvas {
+            margin-top: 20px;
+        }
+        .error {
+            color: red;
+            text-align: center;
+        }
+    </style>
+    <!-- Chart.js Library -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>NBA Player Stats Tracker</h1>
+        <form id="playerStatsForm">
+            <!-- Player Name Input -->
+            <label for="playerName">Player Name:</label>
+            <input type="text" id="playerName" placeholder="Enter player name (e.g., Stephen Curry)" required>
+            
+            <!-- Stat Type Dropdown -->
+            <label for="statType">Stat Type:</label>
+            <select id="statType">
+                <option value="points">Points</option>
+                <option value="rebounds">Rebounds</option>
+                <option value="assists">Assists</option>
+                <option value="steals">Steals</option>
+                <option value="blocks">Blocks</option>
+                <option value="3-pointers">3-Pointers</option>
+                <option value="turnovers">Turnovers</option>
+            </select>
+            
+            <!-- Prop Line Input -->
+            <label for="propLine">Prop Line (Optional):</label>
+            <input type="number" id="propLine" placeholder="Enter prop line value">
+
+            <!-- Submit Button -->
+            <button type="submit" id="submitButton">Get Player Stats</button>
+        </form>
+
+        <!-- Stats Table -->
+        <table id="statsTable"></table>
+
+        <!-- Bar Chart -->
+        <canvas id="statsChart" width="400" height="200"></canvas>
+    </div>
+
+    <script>
+        // Initialize Chart.js instance
+        let statsChart;
+
+        // Event listener for form submission
+        document.getElementById('playerStatsForm').addEventListener('submit', function (e) {
+            e.preventDefault(); // Prevent form from refreshing page
+
+            // Fetch form inputs
+            const playerName = document.getElementById('playerName').value;
+            const statType = document.getElementById('statType').value;
+            const propLine = parseFloat(document.getElementById('propLine').value); // Optional prop line
+            const statsTable = document.getElementById('statsTable');
+            const submitButton = document.getElementById('submitButton');
+
+            // Reset table and chart
+            statsTable.innerHTML = '';
+            if (statsChart) {
+                statsChart.destroy();
+            }
+
+            // Disable button during fetch
+            submitButton.disabled = true;
+            submitButton.textContent = 'Loading...';
+
+            // Fetch player stats from backend
+            fetch('/get_player_stats', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    player_name: playerName,
+                    stat_type: statType
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    // Re-enable button
+                    submitButton.disabled = false;
+                    submitButton.textContent = 'Get Player Stats';
+
+                    // Populate table with stats
+                    if (data.stats && data.stats.length > 0) {
+                        const stats = data.stats.slice(0, 10); // Last 10 games
+                        const headers = Object.keys(stats[0]); // Get headers
+
+                        // Create table header
+                        const headerRow = statsTable.insertRow();
+                        headers.forEach(header => {
+                            const th = document.createElement('th');
+                            th.textContent = header;
+                            headerRow.appendChild(th);
+                        });
+
+                        // Create table rows
+                        stats.forEach(row => {
+                            const tr = statsTable.insertRow();
+                            headers.forEach(header => {
+                                const td = tr.insertCell();
+                                td.textContent = row[header];
+                            });
+                        });
+
+                                        // Prepare chart data
+                                        // Prepare chart data
+                const gameDates = stats.map(row => row['GAME_DATE']); // X-axis
+                const statValues = stats.map(row => parseFloat(row[statType]) || 0); // Y-axis
+
+                // Debugging outputs
+                console.log('Game Dates:', gameDates); // Verify dates
+                console.log('Stat Values for Chart:', statValues); // Verify stat values
+                console.log('Stat Type:', statType); // Verify stat type key matches
+
+                // Destroy any existing chart instance
+                if (statsChart) {
+                    statsChart.destroy();
+                }
+
+                // Create chart
+                const ctx = document.getElementById('statsChart').getContext('2d');
+                statsChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: gameDates,
+                        datasets: [
+                            {
+                                label: `${statType} (Last 10 Games)`,
+                                data: statValues,
+                                backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                                borderColor: 'rgba(54, 162, 235, 1)',
+                                borderWidth: 1,
+                            },
+                        ],
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                display: true,
+                            },
+                            tooltip: {
+                                enabled: true,
+                            },
+                            annotation: propLine ? {
+                                annotations: {
+                                    propLine: {
+                                        type: 'line',
+                                        yMin: propLine,
+                                        yMax: propLine,
+                                        borderColor: 'rgba(255, 99, 132, 1)',
+                                        borderWidth: 2,
+                                        borderDash: [6, 6],
+                                        label: {
+                                            content: `Prop Line (${propLine})`,
+                                            enabled: true,
+                                            position: 'start',
+                                            backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                                        },
+                                    },
+                                },
+                            } : null,
+                        },
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'Game Date',
+                                },
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: statType,
+                                },
+                                beginAtZero: true,
+                            },
+                        },
+                    },
+                });
+
+                // Update chart after configuration
+                statsChart.update();
+
+
+                        // Add prop line if valid
+                        if (!isNaN(propLine)) {
+                            statsChart.options.plugins.annotation = {
+                                annotations: {
+                                    propLine: {
+                                        type: 'line',
+                                        yMin: propLine,
+                                        yMax: propLine,
+                                        borderColor: 'rgba(255, 99, 132, 1)',
+                                        borderWidth: 2,
+                                        borderDash: [6, 6],
+                                        label: {
+                                            content: `Prop Line (${propLine})`,
+                                            enabled: true,
+                                            position: 'start',
+                                            backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                                        },
+                                    },
+                                },
+                            };
+                            statsChart.update();
+                        }
+                    }
+                })
+                .catch(error => {
+                    // Re-enable button and show error
+                    submitButton.disabled = false;
+                    submitButton.textContent = 'Get Player Stats';
+                    statsTable.innerHTML = `<tr><td colspan="2" class="error">Error: ${error.message}</td></tr>`;
+                });
+        });
+    </script>
+</body>
+</html>
